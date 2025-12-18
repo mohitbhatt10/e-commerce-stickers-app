@@ -7,9 +7,9 @@ CREATE TABLE IF NOT EXISTS products
     popularity  INT                                   NOT NULL,
     image_url   VARCHAR(500),
     created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by  VARCHAR(20)                           NOT NULL,
+    created_by  VARCHAR(100)                          NOT NULL,
     updated_at  TIMESTAMP   DEFAULT NULL,
-    updated_by  VARCHAR(20) DEFAULT NULL
+    updated_by  VARCHAR(100) DEFAULT NULL
     );
 
 CREATE TABLE IF NOT EXISTS contacts
@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS contacts
     message       VARCHAR(500)                          NOT NULL,
     status        VARCHAR(50)       NOT NULL,
     created_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by    VARCHAR(20)                           NOT NULL,
+    created_by    VARCHAR(100)                          NOT NULL,
     updated_at    TIMESTAMP   DEFAULT NULL,
-    updated_by    VARCHAR(20) DEFAULT NULL
+    updated_by    VARCHAR(100) DEFAULT NULL
     );
 
 CREATE TABLE IF NOT EXISTS customers
@@ -34,9 +34,9 @@ CREATE TABLE IF NOT EXISTS customers
     mobile_number VARCHAR(15)                           NOT NULL,
     password_hash VARCHAR(500)                          NOT NULL,
     created_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by    VARCHAR(20)                           NOT NULL,
+    created_by    VARCHAR(100)                          NOT NULL,
     updated_at    TIMESTAMP   DEFAULT NULL,
-    updated_by    VARCHAR(20) DEFAULT NULL,
+    updated_by    VARCHAR(100) DEFAULT NULL,
     UNIQUE KEY unique_email (email),
     UNIQUE KEY unique_mobile_number (mobile_number)
     );
@@ -51,9 +51,9 @@ CREATE TABLE IF NOT EXISTS address
     postal_code   VARCHAR(20)  NOT NULL,
     country       VARCHAR(100) NOT NULL,
     created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by    VARCHAR(20)  NOT NULL,
+    created_by    VARCHAR(100) NOT NULL,
     updated_at    TIMESTAMP    DEFAULT NULL,
-    updated_by    VARCHAR(20)  DEFAULT NULL,
+    updated_by    VARCHAR(100) DEFAULT NULL,
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE
 );
 
@@ -61,9 +61,9 @@ CREATE TABLE IF NOT EXISTS roles (
     role_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(50) NOT NULL,
     created_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by VARCHAR(20) NOT NULL,
+    created_by VARCHAR(100) NOT NULL,
     updated_at TIMESTAMP   DEFAULT NULL,
-    updated_by VARCHAR(20) DEFAULT NULL,
+    updated_by VARCHAR(100) DEFAULT NULL,
     UNIQUE KEY unique_name (name)
     );
 
@@ -96,9 +96,9 @@ CREATE TABLE IF NOT EXISTS orders
     payment_status VARCHAR(50)                           NOT NULL,
     order_status   VARCHAR(50)                           NOT NULL,
     created_at     TIMESTAMP   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by     VARCHAR(20)                           NOT NULL,
+    created_by     VARCHAR(100)                          NOT NULL,
     updated_at     TIMESTAMP   DEFAULT NULL,
-    updated_by     VARCHAR(20) DEFAULT NULL,
+    updated_by     VARCHAR(100) DEFAULT NULL,
     FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
     );
 
@@ -110,9 +110,9 @@ CREATE TABLE IF NOT EXISTS order_items
     quantity        INT NOT NULL,
     price           DECIMAL(10, 2) NOT NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by      VARCHAR(20)    NOT NULL,
+    created_by      VARCHAR(100)    NOT NULL,
     updated_at      TIMESTAMP      DEFAULT NULL,
-    updated_by      VARCHAR(20)    DEFAULT NULL,
+    updated_by      VARCHAR(100)    DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
     );

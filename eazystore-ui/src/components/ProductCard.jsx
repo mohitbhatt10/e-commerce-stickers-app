@@ -1,11 +1,9 @@
 import React from "react";
 import Price from "./Price";
 import { Link } from "react-router-dom";
-import { useDispatch } from "react-redux";
-import { addToCart } from "../store/cart-slice";
+import IncrementDecrementBtnComponent from "./IncrementDecrementBtnComponent";
 
 export default function ProductCard({ product }) {
-  const dispatch = useDispatch();
   return (
     <div className="w-72 rounded-md mx-auto border border-gray-300 dark:border-gray-600 shadow-md overflow-hidden flex flex-col bg-white dark:bg-gray-800 hover:border-primary dark:hover:border-lighter transition">
       <Link
@@ -30,12 +28,7 @@ export default function ProductCard({ product }) {
           <div className="bg-lighter dark:bg-light text-primary font-medium text-sm py-2 px-4 rounded-tl-md">
             <Price currency="$" price={product.price} />
           </div>
-          <button
-            className="bg-primary dark:bg-light text-white dark:text-primary font-medium text-sm py-2 px-4 rounded-md hover:cursor-pointer"
-            onClick={() => dispatch(addToCart({ product, quantity: 1 }))}
-          >
-            Add to Cart
-          </button>
+          <IncrementDecrementBtnComponent product={product} />
         </div>
       </div>
     </div>

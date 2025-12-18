@@ -10,13 +10,19 @@ const cartSlice = createSlice({
     // const addToCart = (payload) => ({ type: 'cart/addToCart', payload })
     addToCart(state, action) {
       const { product, quantity } = action.payload;
-      const existingItem = state.find(
+      const existingIndex = state.findIndex(
         (item) => item.productId === product.productId
       );
 
-      if (existingItem) {
-        existingItem.quantity += quantity;
-      } else {
+      if (existingIndex !== -1) {
+        const updatedQuantity = state[existingIndex].quantity + quantity;
+
+        if (updatedQuantity <= 0) {
+          state.splice(existingIndex, 1);
+        } else {
+          state[existingIndex].quantity = updatedQuantity;
+        }
+      } else if (quantity > 0) {
         state.push({ ...product, quantity });
       }
     },

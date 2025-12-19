@@ -1,30 +1,20 @@
 import { useLocation } from "react-router-dom";
 import {
   faArrowLeft,
-  faShoppingCart,
   faShoppingBasket,
 } from "@fortawesome/free-solid-svg-icons";
 import { Link, useNavigate } from "react-router-dom";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useRef } from "react";
-import { useDispatch } from "react-redux";
-import { addToCart } from "../store/cart-slice";
+import IncrementDecrementBtnComponent from "./IncrementDecrementBtnComponent";
 
 export default function ProductDetail() {
   const location = useLocation();
   const product = location.state?.product;
   const navigate = useNavigate();
-  const [quantity, setQuantity] = useState(1);
   const zoomRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
   const [backgroundPosition, setBackgroundPosition] = useState("center");
-  const dispatch = useDispatch();
-
-  const handleAddToCart = () => {
-    if (quantity < 1) return;
-    dispatch(addToCart({ product, quantity }));
-  };
 
   const handleMouseMove = (e) => {
     const { left, top, width, height } =
@@ -89,32 +79,10 @@ export default function ProductDetail() {
           </div>
 
           <div className="flex flex-col space-y-4">
-            {/* Quantity Input */}
             <div className="flex items-center space-x-4">
-              <label
-                htmlFor="quantity"
-                className="text-primary dark:text-light"
-              >
-                Qty:
-              </label>
-              <input
-                type="number"
-                id="quantity"
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                className="w-16 px-2 py-1 border rounded-md focus:ring focus:ring-light dark:focus:ring-gray-600 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-              />
+              <span className="text-primary dark:text-light">Qty:</span>
+              <IncrementDecrementBtnComponent product={product} />
             </div>
-
-            {/* Add to Cart Button */}
-            <button
-              onClick={handleAddToCart}
-              className="w-full px-4 py-2 bg-primary dark:bg-light text-white dark:text-black rounded-md text-lg font-semibold hover:bg-dark dark:hover:bg-lighter transition"
-            >
-              Add to Cart
-              <FontAwesomeIcon icon={faShoppingCart} className="ml-2" />
-            </button>
 
             {/* View Cart Button */}
             <button

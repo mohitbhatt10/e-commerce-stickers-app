@@ -11,6 +11,7 @@ import PageTitle from "./PageTitle";
 import { toast } from "react-toastify";
 import { useDispatch } from "react-redux";
 import { loginSuccess, logout } from "../store/auth-slice";
+import { Country, State, City } from "country-state-city";
 
 export default function Profile() {
   const initialProfileData = useLoaderData();
@@ -21,6 +22,33 @@ export default function Profile() {
   const dispatch = useDispatch();
 
   const [profileData, setProfileData] = useState(initialProfileData);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(() => {
+    const countryValue = initialProfileData?.address?.country;
+    if (!countryValue) return "";
+    const match = Country.getAllCountries().find(
+      (c) => c.isoCode === countryValue || c.name === countryValue
+    );
+    return match?.isoCode || "";
+  });
+  const [selectedStateCode, setSelectedStateCode] = useState(() => {
+    const countryValue = initialProfileData?.address?.country;
+    const stateValue = initialProfileData?.address?.state;
+    if (!countryValue || !stateValue) return "";
+    const countryMatch = Country.getAllCountries().find(
+      (c) => c.isoCode === countryValue || c.name === countryValue
+    );
+    if (!countryMatch) return "";
+    const stateMatch = State.getStatesOfCountry(countryMatch.isoCode).find(
+      (s) => s.isoCode === stateValue || s.name === stateValue
+    );
+    return stateMatch?.isoCode || "";
+  });
+  const [selectedStateName, setSelectedStateName] = useState(
+    initialProfileData?.address?.state || ""
+  );
+  const [selectedCityName, setSelectedCityName] = useState(
+    initialProfileData?.address?.city || ""
+  );
 
   useEffect(() => {
     if (actionData?.success) {
@@ -52,12 +80,95 @@ export default function Profile() {
     }
   }, [actionData]);
 
+  useEffect(() => {
+    const countryValue = profileData?.address?.country;
+    const countryMatch = Country.getAllCountries().find(
+      (c) => c.isoCode === countryValue || c.name === countryValue
+    );
+    const countryCode = countryMatch?.isoCode || "";
+    setSelectedCountryCode(countryCode);
+
+    const states = countryCode
+      ? State.getStatesOfCountry(countryCode)
+      : [];
+    const stateValue = profileData?.address?.state;
+    const stateMatch = states.find(
+      (s) => s.isoCode === stateValue || s.name === stateValue
+    );
+    setSelectedStateCode(stateMatch?.isoCode || "");
+    setSelectedStateName(stateMatch?.name || stateValue || "");
+
+    const cities = countryCode && stateMatch?.isoCode
+      ? City.getCitiesOfState(countryCode, stateMatch.isoCode)
+      : [];
+    const cityValue = profileData?.address?.city;
+    const cityMatch = cities.find((c) => c.name === cityValue);
+    setSelectedCityName(cityMatch?.name || cityValue || "");
+  }, [profileData?.address?.country, profileData?.address?.state, profileData?.address?.city]);
+
   const labelStyle =
     "block text-lg font-semibold text-primary dark:text-light mb-2";
   const h2Style =
     "block text-2xl font-semibold text-primary dark:text-light mb-2";
   const textFieldStyle =
     "w-full px-4 py-2 text-base border rounded-md transition border-primary dark:border-light focus:ring focus:ring-dark dark:focus:ring-lighter focus:outline-none text-gray-800 dark:text-lighter bg-white dark:bg-gray-600 placeholder-gray-400 dark:placeholder-gray-300";
+
+  const countries = Country.getAllCountries();
+  const states = selectedCountryCode
+    ? State.getStatesOfCountry(selectedCountryCode)
+    : [];
+  const cities = selectedCountryCode && selectedStateCode
+    ? City.getCitiesOfState(selectedCountryCode, selectedStateCode)
+    : [];
+
+  const handleCountryChange = (e) => {
+    const code = e.target.value;
+    const countryObj = countries.find((c) => c.isoCode === code);
+    setSelectedCountryCode(code);
+    setSelectedStateCode("");
+    setSelectedStateName("");
+    setSelectedCityName("");
+    setProfileData((prev) => ({
+      ...prev,
+      address: {
+        ...(prev.address || {}),
+        country: countryObj?.isoCode || "",
+        state: "",
+        city: "",
+      },
+    }));
+  };
+
+  const handleStateChange = (e) => {
+    const value = e.target.value;
+    const stateObj = states.find(
+      (s) => s.name === value || s.isoCode === value
+    );
+    setSelectedStateCode(stateObj?.isoCode || "");
+    setSelectedStateName(stateObj?.name || value || "");
+    setSelectedCityName("");
+    setProfileData((prev) => ({
+      ...prev,
+      address: {
+        ...(prev.address || {}),
+        country: selectedCountryCode || prev.address?.country || "",
+        state: stateObj?.name || "",
+        city: "",
+      },
+    }));
+  };
+
+  const handleCityChange = (e) => {
+    const value = e.target.value;
+    setSelectedCityName(value);
+    setProfileData((prev) => ({
+      ...prev,
+      address: {
+        ...(prev.address || {}),
+        city: value,
+      },
+    }));
+  };
 
   return (
     <div className="max-w-[1152px] min-h-[852px] mx-auto px-6 py-8 font-primary bg-normalbg dark:bg-darkbg">
@@ -177,32 +288,27 @@ export default function Profile() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <label htmlFor="city" className={labelStyle}>
-              City
+            <label htmlFor="country" className={labelStyle}>
+              Country
             </label>
-            <input
-              id="city"
-              name="city"
-              type="text"
-              placeholder="Your City"
-              value={profileData.address?.city}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  address: {
-                    ...prev.address,
-                    city: e.target.value,
-                  },
-                }))
-              }
-              className={textFieldStyle}
+            <select
+              id="country"
+              name="country"
               required
-              minLength={3}
-              maxLength={30}
-            />
-            {actionData?.errors?.city && (
+              value={selectedCountryCode}
+              onChange={handleCountryChange}
+              className={textFieldStyle}
+            >
+              <option value="">Select Country</option>
+              {countries.map((country) => (
+                <option key={country.isoCode} value={country.isoCode}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+            {actionData?.errors?.country && (
               <p className="text-red-500 text-sm mt-1">
-                {actionData.errors.city}
+                {actionData.errors.country}
               </p>
             )}
           </div>
@@ -211,26 +317,24 @@ export default function Profile() {
             <label htmlFor="state" className={labelStyle}>
               State
             </label>
-            <input
+            <select
               id="state"
               name="state"
-              type="text"
               required
-              minLength={2}
-              maxLength={30}
-              placeholder="Your State"
-              value={profileData.address?.state}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  address: {
-                    ...prev.address,
-                    state: e.target.value,
-                  },
-                }))
-              }
+              disabled={!selectedCountryCode}
+              value={selectedStateName}
+              onChange={handleStateChange}
               className={textFieldStyle}
-            />
+            >
+              <option value="" disabled={!selectedCountryCode}>
+                {selectedCountryCode ? "Select State" : "Select Country first"}
+              </option>
+              {states.map((state) => (
+                <option key={state.isoCode} value={state.name}>
+                  {state.name}
+                </option>
+              ))}
+            </select>
             {actionData?.errors?.state && (
               <p className="text-red-500 text-sm mt-1">
                 {actionData.errors.state}
@@ -241,6 +345,35 @@ export default function Profile() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
+            <label htmlFor="city" className={labelStyle}>
+              City
+            </label>
+            <select
+              id="city"
+              name="city"
+              required
+              disabled={!selectedStateCode}
+              value={selectedCityName}
+              onChange={handleCityChange}
+              className={textFieldStyle}
+            >
+              <option value="" disabled={!selectedStateCode}>
+                {selectedStateCode ? "Select City" : "Select State first"}
+              </option>
+              {cities.map((city) => (
+                <option key={`${city.name}-${city.stateCode}`} value={city.name}>
+                  {city.name}
+                </option>
+              ))}
+            </select>
+            {actionData?.errors?.city && (
+              <p className="text-red-500 text-sm mt-1">
+                {actionData.errors.city}
+              </p>
+            )}
+          </div>
+
+          <div>
             <label htmlFor="postalCode" className={labelStyle}>
               Postal Code
             </label>
@@ -250,6 +383,9 @@ export default function Profile() {
               type="text"
               placeholder="Your Postal Code"
               value={profileData.address?.postalCode}
+              disabled={
+                !selectedCountryCode || !selectedStateCode || !selectedCityName
+              }
               onChange={(e) =>
                 setProfileData((prev) => ({
                   ...prev,
@@ -261,43 +397,12 @@ export default function Profile() {
               }
               className={textFieldStyle}
               required
-              pattern="^\d{5}$"
-              title="Postal code must be exactly 5 digits"
+              pattern="^\d{6}$"
+              title="Postal code must be exactly 6 digits"
             />
             {actionData?.errors?.postalCode && (
               <p className="text-red-500 text-sm mt-1">
                 {actionData.errors.postalCode}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="country" className={labelStyle}>
-              Country
-            </label>
-            <input
-              id="country"
-              name="country"
-              type="text"
-              required
-              minLength={2}
-              maxLength={2}
-              placeholder="Your Country"
-              value={profileData.address?.country}
-              onChange={(e) =>
-                setProfileData((prev) => ({
-                  ...prev,
-                  address: {
-                    ...prev.address,
-                    country: e.target.value,
-                  },
-                }))
-              }
-              className={textFieldStyle}
-            />
-            {actionData?.errors?.country && (
-              <p className="text-red-500 text-sm mt-1">
-                {actionData.errors.country}
               </p>
             )}
           </div>

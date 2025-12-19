@@ -7,7 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-@Getter @Setter
+@Getter
+@Setter
 public class ProfileRequestDto {
 
     @NotBlank(message = "Name is required")
@@ -35,7 +36,7 @@ public class ProfileRequestDto {
     private String state;
 
     @NotBlank(message = "Postal Code is required")
-    @Pattern(regexp = "^\\d{5}$", message = "Postal code must be exactly 5 digits")
+    @Pattern(regexp = "^\\d{6}$", message = "Postal code must be exactly 6 digits")
     private String postalCode;
 
     @NotBlank(message = "Country is required")

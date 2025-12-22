@@ -19,12 +19,12 @@ import org.springframework.security.authentication.password.CompromisedPasswordD
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -44,22 +44,13 @@ public class AuthController {
     private final JwtUtil jwtUtil;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponseDto> apiLogin(@RequestBody
-    LoginRequestDto loginRequestDto) {
+    public ResponseEntity<LoginResponseDto> apiLogin(@RequestBody LoginRequestDto loginRequestDto) {
         try {
-            Authentication authentication = authenticationManager.authenticate(new
-                    UsernamePasswordAuthenticationToken(loginRequestDto.username(),
-                    loginRequestDto.password()));
-            var userDto = new UserDto();
+            Authentication authentication = authenticationManager
+                    .authenticate(new UsernamePasswordAuthenticationToken(loginRequestDto.username(),
+                            loginRequestDto.password()));
             var loggedInUser = (Customer) authentication.getPrincipal();
-            BeanUtils.copyProperties(loggedInUser, userDto);
-            userDto.setRoles(authentication.getAuthorities().stream().map(
-                    GrantedAuthority::getAuthority).collect(Collectors.joining(",")));
-            if (loggedInUser.getAddress() != null) {
-                AddressDto addressDto = new AddressDto();
-                BeanUtils.copyProperties(loggedInUser.getAddress(), addressDto);
-                userDto.setAddress(addressDto);
-            }
+            var userDto = buildUserDto(loggedInUser, authentication);
             String jwtToken = jwtUtil.generateJwtToken(authentication);
             return ResponseEntity.status(HttpStatus.OK)
                     .body(new LoginResponseDto(HttpStatus.OK.getReasonPhrase(),
@@ -80,21 +71,21 @@ public class AuthController {
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequestDto registerRequestDto) {
 
         CompromisedPasswordDecision decision = compromisedPasswordChecker.check(registerRequestDto.getPassword());
-        if(decision.isCompromised()) {
+        if (decision.isCompromised()) {
             return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("password", "Choose a strong password"));
         }
-        Optional<Customer> existingCustomer =  customerRepository.findByEmailOrMobileNumber
-                (registerRequestDto.getEmail(),registerRequestDto.getMobileNumber());
-        if(existingCustomer.isPresent()) {
+        Optional<Customer> existingCustomer = customerRepository
+                .findByEmailOrMobileNumber(registerRequestDto.getEmail(), registerRequestDto.getMobileNumber());
+        if (existingCustomer.isPresent()) {
             Map<String, String> errors = new HashMap<>();
             Customer customer = existingCustomer.get();
 
             if (customer.getEmail().equalsIgnoreCase(registerRequestDto.getEmail())) {
                 errors.put("email", "Email is already registered");
             }
-            if (customer.getMobileNumber().equals(registerRequestDto.getMobileNumber())) {
+            if (Objects.equals(customer.getMobileNumber(), registerRequestDto.getMobileNumber())) {
                 errors.put("mobileNumber", "Mobile number is already registered");
             }
 
@@ -110,12 +101,57 @@ public class AuthController {
                 .body("Registration successful");
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<UserDto> me() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Object principal = authentication.getPrincipal();
+        String email = null;
+        if (principal instanceof Customer principalCustomer) {
+            email = principalCustomer.getEmail();
+        } else if (principal instanceof String principalEmail) {
+            // JWTTokenValidatorFilter sets principal to the email string
+            email = principalEmail;
+        } else if (principal instanceof OAuth2User oauth2User) {
+            email = oauth2User.getAttribute("email");
+        }
+
+        if (email == null || email.isBlank()) {
+            // last-resort fallback
+            email = authentication.getName();
+        }
+
+        Customer customer = customerRepository.findByEmail(email).orElse(null);
+
+        if (customer == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.ok(buildUserDto(customer, authentication));
+    }
+
+    private UserDto buildUserDto(Customer customer, Authentication authentication) {
+        var userDto = new UserDto();
+        BeanUtils.copyProperties(customer, userDto);
+        userDto.setRoles(authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.joining(",")));
+        if (customer.getAddress() != null) {
+            AddressDto addressDto = new AddressDto();
+            BeanUtils.copyProperties(customer.getAddress(), addressDto);
+            userDto.setAddress(addressDto);
+        }
+        return userDto;
+    }
+
     private ResponseEntity<LoginResponseDto> buildErrorResponse(HttpStatus status,
             String message) {
         return ResponseEntity
                 .status(status)
                 .body(new LoginResponseDto(message, null, null));
     }
-
 
 }

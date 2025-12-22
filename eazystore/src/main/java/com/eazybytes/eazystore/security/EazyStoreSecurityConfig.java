@@ -1,6 +1,8 @@
 package com.eazybytes.eazystore.security;
 
 import com.eazybytes.eazystore.filter.JWTTokenValidatorFilter;
+import com.eazybytes.eazystore.security.oauth.OAuth2LoginFailureHandler;
+import com.eazybytes.eazystore.security.oauth.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -8,20 +10,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.ProviderManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.authentication.password.CompromisedPasswordChecker;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.password.HaveIBeenPwnedRestApiPasswordChecker;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -38,6 +34,8 @@ import static org.springframework.security.config.Customizer.withDefaults;
 public class EazyStoreSecurityConfig {
 
     private final List<String> publicPaths;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
 
     @Value("${eazystore.cors.allowed-origins}")
     private String allowedOrigins;
@@ -48,24 +46,24 @@ public class EazyStoreSecurityConfig {
         return http.csrf(csrfConfig -> csrfConfig.disable())
                 .cors(corsConfig -> corsConfig.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests((requests) -> {
-                            publicPaths.forEach(path ->
-                                    requests.requestMatchers(path).permitAll());
-                            requests.requestMatchers("/api/v1/admin/**").hasRole("ADMIN");
-                            requests.requestMatchers("/eazystore/actuator/**").hasRole("OPS_ENG");
-                            requests.requestMatchers("/swagger-ui.html", "/swagger-ui/**",
-                            "/v3/api-docs/**").hasAnyRole("DEV_ENG","QA_ENG");
-                            requests.anyRequest().hasAnyRole("USER", "ADMIN");
-                        }
-                )
+                    publicPaths.forEach(path -> requests.requestMatchers(path).permitAll());
+                    requests.requestMatchers("/api/v1/admin/**").hasRole("ADMIN");
+                    requests.requestMatchers("/eazystore/actuator/**").hasRole("OPS_ENG");
+                    requests.requestMatchers("/swagger-ui.html", "/swagger-ui/**",
+                            "/v3/api-docs/**").hasAnyRole("DEV_ENG", "QA_ENG");
+                    requests.anyRequest().hasAnyRole("USER", "ADMIN");
+                })
                 .addFilterBefore(new JWTTokenValidatorFilter(publicPaths), BasicAuthenticationFilter.class)
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2LoginSuccessHandler)
+                        .failureHandler(oAuth2LoginFailureHandler))
                 .formLogin(withDefaults())
                 .httpBasic(withDefaults()).build();
     }
 
-
     @Bean
     public AuthenticationManager authenticationManager(
-             AuthenticationProvider authenticationProvider) {
+            AuthenticationProvider authenticationProvider) {
         var providerManager = new ProviderManager(authenticationProvider);
         return providerManager;
     }

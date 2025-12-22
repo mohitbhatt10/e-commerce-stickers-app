@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EazyStore – Google OAuth2 Login (End-to-End Implementation)</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.45; margin: 0; }
+    header, main, footer { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    header { border-bottom: 1px solid rgba(127,127,127,.35); }
+    h1 { margin: 0 0 8px 0; font-size: 24px; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    h3 { margin-top: 18px; font-size: 15px; }
+    p, li { font-size: 14px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12.5px; }
+    pre { padding: 12px; border: 1px solid rgba(127,127,127,.35); border-radius: 8px; overflow: auto; }
+    .note { padding: 12px; border-left: 4px solid rgba(127,127,127,.65); background: rgba(127,127,127,.08); border-radius: 6px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+    footer { border-top: 1px solid rgba(127,127,127,.35); opacity: .85; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Google OAuth2 Login – End-to-End Implementation</h1>
+    <p>
+      This document explains how Google OAuth2 login was integrated into the EazyStore backend (Spring Boot) and frontend (React/Vite),
+      including the complete request/redirect flow, configuration steps, and a list of files changed.
+    </p>
+    <p><strong>Repo</strong>: e-commerce-stickers-app</p>
+  </header>
+
+  <main>
+    <h2>1) Goal and high-level design</h2>
+    <p>
+      The app already supported username/password login using JWTs stored in the browser and sent via the <code>Authorization: Bearer</code> header.
+      The Google OAuth2 integration was added in a way that:
+    </p>
+    <ul>
+      <li>Uses Spring Security OAuth2 client to authenticate with Google.</li>
+      <li>Creates (or updates) a <code>Customer</code> record in MySQL for first-time Google users.</li>
+      <li>Issues the same internal JWT used by the existing app.</li>
+      <li>Redirects back to the SPA with the JWT so the SPA can complete login and go to <code>/home</code>.</li>
+    </ul>
+
+    <div class="note">
+      <strong>Important:</strong> This implementation intentionally keeps the app’s JWT-based API security model. Google OAuth2 is used only for identity login,
+      then the app continues using its own JWT for API calls.
+    </div>
+
+    <h2>2) End-to-end login flow (sequence)</h2>
+    <ol>
+      <li>User clicks <em>Continue with Google</em> in the SPA.</li>
+      <li>Browser navigates to backend endpoint: <code>http://localhost:8080/oauth2/authorization/google</code>.</li>
+      <li>Spring Security redirects the user to Google’s consent/login page.</li>
+      <li>After login, Google redirects back to Spring Security callback:
+        <code>http://localhost:8080/login/oauth2/code/google</code></li>
+      <li>Spring Security completes authentication and triggers a custom success handler.</li>
+      <li>The success handler:
+        <ul>
+          <li>Extracts <code>email</code>, <code>name</code>, and <code>sub</code> from the Google profile.</li>
+          <li>Creates/updates a <code>Customer</code> in the DB.</li>
+          <li>Builds authorities from the customer roles and generates an internal JWT.</li>
+          <li>Redirects the browser to the SPA callback route with the JWT as a query param:
+            <code>http://localhost:5173/oauth2/redirect?token=...</code></li>
+        </ul>
+      </li>
+      <li>The SPA callback route stores the JWT and calls <code>GET /api/v1/auth/me</code> to fetch user details.</li>
+      <li>SPA dispatches <code>loginSuccess</code> (Redux) and navigates to <code>/home</code>.</li>
+    </ol>
+
+    <h2>3) Backend implementation details (Spring Boot)</h2>
+    <div class="grid">
+      <section>
+        <h3>3.1 Dependencies</h3>
+        <p>Added OAuth2 client support:</p>
+        <pre><code>eazystore/pom.xml
+- added: org.springframework.boot:spring-boot-starter-oauth2-client</code></pre>
+      </section>
+
+      <section>
+        <h3>3.2 Security configuration</h3>
+        <p>
+          OAuth endpoints must be reachable without a JWT; otherwise the JWT filter would block the OAuth handshake.
+          Public paths were updated to include:
+        </p>
+        <pre><code>/oauth2/**
+/login/oauth2/**</code></pre>
+        <p>
+          OAuth2 login is enabled in the security filter chain, with custom success/failure handlers.
+        </p>
+      </section>
+    </div>
+
+    <h3>3.3 Customer provisioning for Google users</h3>
+    <p>
+      A service was introduced to create (or update) a <code>Customer</code> when Google login succeeds.
+      It sets provider fields and assigns <code>ROLE_USER</code> on first creation.
+    </p>
+
+    <h3>3.4 JWT issuance on OAuth2 success</h3>
+    <p>
+      The custom success handler converts the provisioned <code>Customer</code> into an internal Spring Security
+      authentication token (with authorities) and calls the existing <code>JwtUtil</code> to generate the app JWT.
+      Then it redirects to the frontend redirect URI with <code>?token=...</code>.
+    </p>
+
+    <h3>3.5 “Who am I?” endpoint for SPA login completion</h3>
+    <p>
+      The SPA needs the authenticated user object after OAuth2 redirect. A new endpoint was added:
+      <code>GET /api/v1/auth/me</code>
+    </p>
+    <p>
+      This endpoint was designed to work with the existing JWT filter behavior.
+      The JWT filter sets principal as a string email (not a <code>Customer</code> object), so <code>/me</code> loads
+      the customer from the DB based on the principal email.
+    </p>
+
+    <h3>3.6 Auditing fix (created_by truncation)</h3>
+    <p>
+      A production issue was observed: <code>created_by</code> overflow on insert. Root cause: auditor logic fell back
+      to <code>principal.toString()</code>, which can be huge for OAuth2 principals.
+    </p>
+    <p>
+      Fix: auditor now returns a short stable identifier (prefer email) and hard-caps to 100 chars.
+    </p>
+
+    <h2>4) Frontend implementation details (React/Vite)</h2>
+    <h3>4.1 Login/Register buttons</h3>
+    <p>
+      Both Login and Register pages include a <em>Continue with Google</em> button.
+      It navigates the browser to <code>${backendOrigin}/oauth2/authorization/google</code>, where
+      <code>backendOrigin</code> is derived from <code>VITE_API_BASE_URL</code>.
+    </p>
+
+    <h3>4.2 SPA redirect route</h3>
+    <p>
+      A route <code>/oauth2/redirect</code> was added.
+      The handler reads <code>token</code> from the query string, stores it into <code>localStorage</code> as <code>jwtToken</code>,
+      then calls <code>GET /api/v1/auth/me</code>. On success it dispatches Redux <code>loginSuccess</code> and navigates to <code>/home</code>.
+    </p>
+
+    <h2>5) Configuration: Google Console + environment variables</h2>
+
+    <h3>5.1 Google Cloud Console setup</h3>
+    <ol>
+      <li>Create/select a Google Cloud project.</li>
+      <li>Go to <strong>APIs &amp; Services</strong> → <strong>Credentials</strong>.</li>
+      <li>Create <strong>OAuth client ID</strong> → <strong>Web application</strong>.</li>
+      <li>Set <strong>Authorized redirect URI</strong> to:</li>
+    </ol>
+    <pre><code>http://localhost:8080/login/oauth2/code/google</code></pre>
+
+    <h3>5.2 Backend properties</h3>
+    <p>
+      The backend reads Google client credentials from environment variables mapped in
+      <code>eazystore/src/main/resources/application.properties</code>.
+    </p>
+
+    <pre><code># Backend (Spring Boot) env vars
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID=YOUR_CLIENT_ID
+SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=YOUR_CLIENT_SECRET
+
+# Optional: where backend should redirect after OAuth success
+EAZYSTORE_OAUTH2_FRONTEND_REDIRECT_URI=http://localhost:5173/oauth2/redirect</code></pre>
+
+    <h3>5.3 Frontend config</h3>
+    <p>
+      The frontend must know the backend API base URL:
+    </p>
+    <pre><code>eazystore-ui/.env
+VITE_API_BASE_URL="http://localhost:8080/api/v1"</code></pre>
+
+    <h2>6) Files changed / added for this feature</h2>
+    <p>
+      Below is the set of key files that were updated/added as part of the Google OAuth2 integration.
+    </p>
+
+    <h3>Backend</h3>
+    <ul>
+      <li>eazystore/pom.xml</li>
+      <li>eazystore/src/main/resources/application.properties</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/security/EazyStoreSecurityConfig.java</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/security/PublicPathConfig.java</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/security/oauth/OAuth2LoginSuccessHandler.java</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/security/oauth/OAuth2LoginFailureHandler.java</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/security/oauth/GoogleCustomerProvisioningService.java</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/controller/AuthController.java (added /auth/me and improved principal email extraction)</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/entity/Customer.java (nullable password/mobile + provider fields)</li>
+      <li>eazystore/src/main/resources/sql/schema.sql (added provider fields + nullable columns for OAuth users)</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/security/EazyStoreUsernamePwdAuthenticationProvider.java (guard against null passwordHash)</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/config/AuditorAwareImpl.java (avoid large created_by values)</li>
+      <li>eazystore/src/main/java/com/eazybytes/eazystore/entity/BaseEntity.java (created_by column length alignment)</li>
+    </ul>
+
+    <h3>Frontend</h3>
+    <ul>
+      <li>eazystore-ui/src/components/Login.jsx (added Google login button)</li>
+      <li>eazystore-ui/src/components/Register.jsx (added Google login button)</li>
+      <li>eazystore-ui/src/components/OAuth2RedirectHandler.jsx (new SPA callback page)</li>
+      <li>eazystore-ui/src/main.jsx (new route /oauth2/redirect)</li>
+    </ul>
+
+    <h2>7) Troubleshooting</h2>
+    <h3>7.1 Redirect goes back to /login</h3>
+    <p>
+      The SPA will redirect to /login if the callback handler cannot call <code>/api/v1/auth/me</code>
+      (for example due to a 401). Common causes:
+    </p>
+    <ul>
+      <li>JWT not stored (token missing from redirect URL).</li>
+      <li>JWT not being attached (check request headers for <code>Authorization: Bearer ...</code>).</li>
+      <li><code>/auth/me</code> principal mismatch (fixed by resolving email from principal and DB lookup).</li>
+    </ul>
+
+    <h3>7.2 created_by “Data too long” errors</h3>
+    <p>
+      Fixed by changing auditing logic to avoid long OAuth2 principal strings and by capping length.
+      Ensure your DB schema uses <code>created_by VARCHAR(100)</code> consistently.
+    </p>
+
+    <h3>7.3 Local dev ports</h3>
+    <ul>
+      <li>Backend: http://localhost:8080</li>
+      <li>Frontend: http://localhost:5173</li>
+    </ul>
+
+    <h2>8) Security notes</h2>
+    <ul>
+      <li>
+        The JWT is passed back to the SPA via a query parameter in the redirect URL.
+        This is simple and works for local/dev, but be mindful that URLs can be logged in browser history and server logs.
+        A production-hardening option is to return the JWT in a short-lived one-time code and exchange it via a POST,
+        or set an HttpOnly cookie.
+      </li>
+      <li>
+        Always keep Google OAuth client secrets out of source control. Use environment variables.
+      </li>
+    </ul>
+  </main>
+
+  <footer>
+    <p>Generated for the EazyStore workspace docs folder.</p>
+  </footer>
+</body>
+</html>

@@ -13,6 +13,7 @@ import {
 import About from "./components/About.jsx";
 import Contact, { contactLoader } from "./components/Contact.jsx";
 import Login, { loginAction } from "./components/Login.jsx";
+import OAuth2RedirectHandler from "./components/OAuth2RedirectHandler.jsx";
 import Cart from "./components/Cart.jsx";
 import Home from "./components/Home.jsx";
 import ErrorPage from "./components/ErrorPage.jsx";
@@ -53,6 +54,7 @@ const routeDefinitions = createRoutesFromElements(
       loader={contactLoader}
     />
     <Route path="/login" element={<Login />} action={loginAction} />
+    <Route path="/oauth2/redirect" element={<OAuth2RedirectHandler />} />
     <Route path="/register" element={<Register />} action={registerAction} />
     <Route path="/cart" element={<Cart />} />
     <Route path="/products/:productId" element={<ProductDetail />} />

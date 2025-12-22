@@ -1,7 +1,6 @@
 package com.eazybytes.eazystore.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,36 +19,34 @@ public class Customer extends BaseEntity {
     private Long customerId;
 
     @Size(max = 100)
-    @NotNull
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
     @Size(max = 100)
-    @NotNull
     @Column(name = "email", nullable = false, length = 100)
     private String email;
 
     @Size(max = 15)
-    @NotNull
-    @Column(name = "mobile_number", nullable = false, length = 15)
+    @Column(name = "mobile_number", nullable = true, length = 15)
     private String mobileNumber;
 
     @Size(max = 500)
-    @NotNull
-    @Column(name = "password_hash", nullable = false, length = 500)
+    @Column(name = "password_hash", nullable = true, length = 500)
     private String passwordHash;
 
-    @OneToOne(mappedBy = "customer",cascade = CascadeType.ALL)
+    @Size(max = 20)
+    @Column(name = "auth_provider", length = 20)
+    private String authProvider;
+
+    @Size(max = 100)
+    @Column(name = "provider_user_id", length = 100)
+    private String providerUserId;
+
+    @OneToOne(mappedBy = "customer", cascade = CascadeType.ALL)
     private Address address;
 
     @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "customer_roles",
-            joinColumns = @JoinColumn(name = "customer_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
+    @JoinTable(name = "customer_roles", joinColumns = @JoinColumn(name = "customer_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles = new LinkedHashSet<>();
-
-
 
 }

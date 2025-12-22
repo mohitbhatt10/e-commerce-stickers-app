@@ -20,6 +20,11 @@ export default function Register() {
 
   const isSubmitting = navigation.state === "submitting";
 
+  const handleGoogleLogin = () => {
+    const backendOrigin = new URL(import.meta.env.VITE_API_BASE_URL).origin;
+    window.location.href = `${backendOrigin}/oauth2/authorization/google`;
+  };
+
   useEffect(() => {
     if (actionData?.success) {
       navigate("/login");
@@ -59,6 +64,14 @@ export default function Register() {
     <div className="min-h-[752px] flex items-center justify-center font-primary dark:bg-darkbg">
       <div className="bg-white dark:bg-gray-700 shadow-md rounded-lg max-w-md w-full px-8 py-6">
         <PageTitle title="Register" />
+
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          className="w-full mb-4 px-6 py-2 text-white dark:text-black text-xl bg-primary dark:bg-light hover:bg-dark dark:hover:bg-lighter rounded-md transition duration-200"
+        >
+          Continue with Google
+        </button>
 
         <Form
           method="POST"
